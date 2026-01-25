@@ -18,6 +18,8 @@ const LeafAnalysis = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [imageVersion, setImageVersion] = useState(0);
+
 
   const fetchAnalysis = async () => {
     setIsAnalyzing(true);
@@ -37,6 +39,9 @@ const LeafAnalysis = () => {
         severity: data.healthy ? "low" : "moderate",
         affectedArea: data.healthy ? "None" : "Leaf surface",
       });
+
+      // 👇 force image refresh
+      setImageVersion(Date.now());
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -47,6 +52,7 @@ const LeafAnalysis = () => {
   const resetAnalysis = () => {
     setAnalysis(null);
     setError(null);
+    setImageVersion(0);
   };
 
   return (
@@ -112,7 +118,7 @@ const LeafAnalysis = () => {
             {/* Image */}
             <div className="aspect-[4/3] rounded-xl overflow-hidden bg-muted">
               <img
-                src="http://192.168.100.56:8000/farm-images/latest_leaf.jpg"
+                src={`http://192.168.100.56:8000/farm-images/latest_leaf.jpg?v=${imageVersion}`}
                 alt="Analyzed leaf"
                 className="w-full h-full object-cover"
               />

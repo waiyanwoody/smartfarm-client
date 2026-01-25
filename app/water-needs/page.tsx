@@ -1,7 +1,7 @@
 "use client";
 
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { WaterNeeds } from "@/components/water-needs";
+import { WaterNeeds } from "@/water-needs";
 
 export default function WaterNeedsPage() {
   return (
