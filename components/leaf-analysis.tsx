@@ -19,6 +19,7 @@ const LeafAnalysis = () => {
   const [analysis, setAnalysis] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [imageVersion, setImageVersion] = useState(0);
+  const pi_url = process.env.NEXT_PUBLIC_PI_URL;
 
 
   const fetchAnalysis = async () => {
@@ -27,7 +28,7 @@ const LeafAnalysis = () => {
     setAnalysis(null);
 
     try {
-      const res = await fetch("http://192.168.100.56:8000/capture-analyze");
+      const res = await fetch(`${pi_url}/capture-analyze`);
       if (!res.ok) throw new Error("Failed to analyze leaf");
 
       const data = await res.json();
@@ -118,7 +119,7 @@ const LeafAnalysis = () => {
             {/* Image */}
             <div className="aspect-[4/3] rounded-xl overflow-hidden bg-muted">
               <img
-                src={`http://192.168.100.56:8000/farm-images/latest_leaf.jpg?v=${imageVersion}`}
+                src={`${pi_url}/farm-images/latest_leaf.jpg?v=${imageVersion}`}
                 alt="Analyzed leaf"
                 className="w-full h-full object-cover"
               />
