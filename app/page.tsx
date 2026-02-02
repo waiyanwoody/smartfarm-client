@@ -1,9 +1,7 @@
 "use client";
 
-import { cn } from "@/lib/utils"
-
+import { cn } from "@/lib/utils";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { StatsOverview } from "@/components/stats-overview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,6 +14,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 const quickActions = [
   {
@@ -70,65 +69,125 @@ const recentAlerts = [
   },
 ];
 
+type SystemStatus = {
+  rain: string;
+  soil: string;
+  temperature: number;
+  humidity: number;
+};
+
 export default function Dashboard() {
+  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchStatus = async () => {
+    try {
+      setLoading(true);
+      const pi_url = process.env.NEXT_PUBLIC_PI_URL!;
+      const res = await fetch(`${pi_url}/status`);
+      const data = await res.json();
+      setStatus(data);
+    } catch (err) {
+      console.error("Failed to fetch status", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStatus(); // initial fetch
+    const interval = setInterval(fetchStatus, 5000); // auto-refresh every 5s
+    return () => clearInterval(interval); // cleanup on unmount
+  }, []);
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Page Header */}
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Dashboard</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Overview of your lettuce farm performance
-          </p>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-semibold">Dashboard</h1>
+            <p className="text-sm text-muted-foreground">
+              Overview of your lettuce farm performance
+            </p>
+          </div>
+
+          <button
+            onClick={fetchStatus}
+            disabled={loading}
+            className="text-sm px-4 py-2 rounded-md border hover:bg-muted"
+          >
+            {loading ? "Refreshing..." : "Refresh"}
+          </button>
         </div>
 
-        {/* Stats Overview */}
-        <StatsOverview />
+        {/* Top Status Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Soil Moisture</p>
+              <p
+                className={cn(
+                  "text-xl font-semibold",
+                  status?.soil === "dry" ? "text-red-500" : "text-green-600"
+                )}
+              >
+                {status ? status.soil : "--"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Temperature</p>
+              <p className="text-xl font-semibold">
+                {status ? `${status.temperature} °C` : "--"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Humidity</p>
+              <p className="text-xl font-semibold">
+                {status ? `${status.humidity} %` : "--"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Rain</p>
+              <p
+                className={cn(
+                  "text-xl font-semibold",
+                  status?.rain === "rain"
+                    ? "text-blue-600"
+                    : "text-green-600"
+                )}
+              >
+                {status ? status.rain : "--"}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Quick Actions */}
         <div>
-          <h2 className="text-base sm:text-lg font-medium text-foreground mb-3 sm:mb-4">
-            Quick Actions
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <h2 className="text-lg font-medium mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {quickActions.map((action) => (
               <Link key={action.href} href={action.href}>
-                <Card className="h-full hover:border-primary/50 hover:shadow-md transition-all duration-200 cursor-pointer group">
-                  <CardContent className="p-4 sm:p-5">
-                    <div className="flex items-start justify-between mb-3 sm:mb-4">
-                      <div className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-primary/10">
-                        <action.icon className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-                      </div>
-                      <Badge
-                        variant={
-                          action.statusType === "success"
-                            ? "default"
-                            : action.statusType === "warning"
-                              ? "secondary"
-                              : "outline"
-                        }
-                        className={cn(
-                          "text-[10px] sm:text-xs",
-                          action.statusType === "success"
-                            ? "bg-primary/10 text-primary border-0"
-                            : action.statusType === "warning"
-                              ? "bg-amber-100 text-amber-700 border-0"
-                              : ""
-                        )}
-                      >
-                        {action.status}
-                      </Badge>
+                <Card className="hover:shadow-md transition cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between mb-3">
+                      <action.icon className="w-5 h-5 text-primary" />
+                      <Badge>{action.status}</Badge>
                     </div>
-                    <h3 className="font-medium text-sm sm:text-base text-foreground mb-1">
-                      {action.title}
-                    </h3>
-                    <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3 line-clamp-2">
+                    <p className="font-medium">{action.title}</p>
+                    <p className="text-sm text-muted-foreground">
                       {action.description}
                     </p>
-                    <div className="flex items-center text-xs sm:text-sm text-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                      Open
-                      <ArrowRight className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
-                    </div>
                   </CardContent>
                 </Card>
               </Link>
@@ -138,35 +197,24 @@ export default function Dashboard() {
 
         {/* Recent Alerts */}
         <div>
-          <h2 className="text-base sm:text-lg font-medium text-foreground mb-3 sm:mb-4">
-            Recent Alerts
-          </h2>
+          <h2 className="text-lg font-medium mb-4">Recent Alerts</h2>
           <Card>
-            <CardContent className="p-0">
-              <div className="divide-y divide-border">
-                {recentAlerts.map((alert, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-3 sm:gap-4 px-3 sm:px-5 py-3 sm:py-4"
-                  >
-                    {alert.type === "warning" ? (
-                      <div className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-amber-100 shrink-0">
-                        <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-primary/10 shrink-0">
-                        <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs sm:text-sm text-foreground">{alert.message}</p>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
-                        {alert.time}
-                      </p>
-                    </div>
+            <CardContent className="p-0 divide-y">
+              {recentAlerts.map((alert, i) => (
+                <div key={i} className="flex gap-3 px-4 py-3">
+                  {alert.type === "warning" ? (
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-primary" />
+                  )}
+                  <div>
+                    <p className="text-sm">{alert.message}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {alert.time}
+                    </p>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>

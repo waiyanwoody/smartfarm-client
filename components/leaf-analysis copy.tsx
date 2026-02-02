@@ -1,5 +1,9 @@
+"use client";
+
 import { Loader2 } from "lucide-react";
 import React, { useState } from "react";
+
+const PI_URL = process.env.NEXT_PUBLIC_PI_URL;
 
 const LeafAnalysis = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -11,7 +15,7 @@ const LeafAnalysis = () => {
     setError(null);
 
     try {
-      const response = await fetch("http://192.168.100.56:8000/capture-analyze");
+      const response = await fetch(`${PI_URL}/capture-analyze`);
       if (!response.ok) {
         throw new Error("Failed to fetch analysis");
       }
@@ -32,7 +36,9 @@ const LeafAnalysis = () => {
           <div className="absolute inset-0 flex items-center justify-center bg-background/40">
             <div className="text-center">
               <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto" />
-              <p className="text-sm font-medium text-foreground mt-3">Analyzing with ML model...</p>
+              <p className="text-sm font-medium text-foreground mt-3">
+                Analyzing with ML model...
+              </p>
             </div>
           </div>
         </div>
@@ -40,7 +46,7 @@ const LeafAnalysis = () => {
         <div className="space-y-4">
           <div className="aspect-[4/3] rounded-xl overflow-hidden bg-muted relative">
             <img
-              src={`http://192.168.100.56:8000/farm-images/latest_leaf.jpg`}
+              src={`${PI_URL}/farm-images/latest_leaf.jpg`}
               alt="Analyzed leaf"
               className="w-full h-full object-cover"
             />

@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+"use client";
+
+import React, { useRef, useState } from "react";
 import {
   Card,
   CardHeader,
@@ -15,34 +17,56 @@ import {
 } from "lucide-react";
 
 const LeafAnalysis = () => {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [file, setFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  const [imageVersion, setImageVersion] = useState(0);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   const pi_url = process.env.NEXT_PUBLIC_PI_URL;
 
+  // Open phone camera
+  const openCamera = () => {
+    fileInputRef.current?.click();
+  };
 
-  const fetchAnalysis = async () => {
+  // Handle captured image
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+
+    setFile(selected);
+    setImagePreview(URL.createObjectURL(selected));
+  };
+
+  // Upload + analyze
+  const uploadAndAnalyze = async () => {
+    if (!file) return;
+
     setIsAnalyzing(true);
     setError(null);
     setAnalysis(null);
 
+    const formData = new FormData();
+    formData.append("file", file);
+
     try {
-      const res = await fetch(`${pi_url}/capture-analyze`);
-      if (!res.ok) throw new Error("Failed to analyze leaf");
+      const res = await fetch(`${pi_url}/upload-analyze`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("Analysis failed");
 
       const data = await res.json();
 
       setAnalysis({
         disease: data.prediction_label,
         confidence: data.confidence * 100,
-        status: data.healthy ? "healthy" : "diseased",
-        severity: data.healthy ? "low" : "moderate",
-        affectedArea: data.healthy ? "None" : "Leaf surface",
+        healthy: data.healthy,
       });
-
-      // 👇 force image refresh
-      setImageVersion(Date.now());
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -50,151 +74,103 @@ const LeafAnalysis = () => {
     }
   };
 
-  const resetAnalysis = () => {
+  const reset = () => {
+    setFile(null);
     setAnalysis(null);
     setError(null);
-    setImageVersion(0);
+    setImagePreview(null);
   };
 
   return (
-    <Card className="border border-border bg-card overflow-hidden">
-      <CardHeader className="pb-4">
-        <CardTitle className="flex items-center justify-between">
-          <span className="text-lg font-semibold">Leaf Analysis</span>
-
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex justify-between items-center">
+          Leaf Analysis
           {analysis && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={resetAnalysis}
-              className="h-8 px-3 text-xs"
-            >
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-              New Scan
+            <Button variant="ghost" size="sm" onClick={reset}>
+              <RefreshCw className="w-4 h-4 mr-1" />
+              New
             </Button>
           )}
         </CardTitle>
       </CardHeader>
 
-      <CardContent>
-        {/* INITIAL STATE */}
-        {!analysis && !isAnalyzing && (
-          <div className="space-y-5">
-            <div className="aspect-[4/3] rounded-xl border-2 border-dashed bg-muted/30 flex flex-col items-center justify-center gap-4">
-              <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center">
-                <Leaf className="w-10 h-10 text-primary" />
-              </div>
-              <div className="text-center">
-                <p className="text-base font-medium">Ready to Analyze</p>
-                <p className="text-sm text-muted-foreground">
-                  Analyze the latest captured lettuce leaf
-                </p>
-              </div>
-            </div>
+      <CardContent className="space-y-4">
+        {/* Hidden Camera Input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileChange}
+          hidden
+        />
 
-            <Button
-              onClick={fetchAnalysis}
-              className="w-full h-12 text-base"
-            >
+        {/* Initial */}
+        {!file && !isAnalyzing && !analysis && (
+          <div className="text-center space-y-4">
+            <div className="h-48 flex items-center justify-center border rounded-xl bg-muted">
+              <Leaf className="w-16 h-16 text-muted-foreground" />
+            </div>
+            <Button className="w-full h-12" onClick={openCamera}>
+              Capture Leaf
+            </Button>
+          </div>
+        )}
+
+        {/* Preview */}
+        {file && !analysis && !isAnalyzing && (
+          <div className="space-y-3">
+            <img
+              src={imagePreview!}
+              className="rounded-xl w-full h-64 object-cover"
+              alt="preview"
+            />
+            <Button className="w-full h-12" onClick={uploadAndAnalyze}>
               Analyze Leaf
             </Button>
           </div>
         )}
 
-        {/* LOADING */}
+        {/* Loading */}
         {isAnalyzing && (
-          <div className="aspect-[4/3] rounded-xl bg-muted relative flex items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto" />
-              <p className="text-sm font-medium mt-3">
-                Analyzing with ML model...
-              </p>
-            </div>
+          <div className="h-48 flex flex-col items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <p className="mt-2 text-sm">Analyzing…</p>
           </div>
         )}
 
-        {/* RESULT */}
-        {analysis && !isAnalyzing && (
-          <div className="space-y-4">
-            {/* Image */}
-            <div className="aspect-[4/3] rounded-xl overflow-hidden bg-muted">
-              <img
-                src={`${pi_url}/farm-images/latest_leaf.jpg?v=${imageVersion}`}
-                alt="Analyzed leaf"
-                className="w-full h-full object-cover"
-              />
-            </div>
+        {/* Result */}
+        {analysis && (
+          <div className="space-y-3">
+            <img
+              src={imagePreview!}
+              className="rounded-xl w-full h-64 object-cover"
+              alt="result"
+            />
 
-            {/* Status Banner */}
             <div
               className={`p-4 rounded-xl border ${
-                analysis.status === "healthy"
-                  ? "bg-primary/5 border-primary/20"
-                  : "bg-destructive/5 border-destructive/20"
+                analysis.healthy
+                  ? "bg-green-50 border-green-300"
+                  : "bg-red-50 border-red-300"
               }`}
             >
               <div className="flex items-center gap-3">
-                {analysis.status === "healthy" ? (
-                  <CheckCircle2 className="w-10 h-10 text-primary" />
+                {analysis.healthy ? (
+                  <CheckCircle2 className="text-green-600" />
                 ) : (
-                  <AlertTriangle className="w-10 h-10 text-destructive" />
+                  <AlertTriangle className="text-red-600" />
                 )}
-
                 <div>
-                  <p
-                    className={`text-lg font-semibold ${
-                      analysis.status === "healthy"
-                        ? "text-primary"
-                        : "text-destructive"
-                    }`}
-                  >
-                    {analysis.disease}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Confidence: {analysis.confidence.toFixed(2)}%
-                  </p>
+                  <p className="font-semibold">{analysis.disease}</p>
                 </div>
-              </div>
-            </div>
-
-            {/* Details */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg bg-muted/50">
-                <p className="text-xs text-muted-foreground uppercase">Status</p>
-                <p className="text-sm font-medium capitalize">
-                  {analysis.status}
-                </p>
-              </div>
-
-              <div className="p-3 rounded-lg bg-muted/50">
-                <p className="text-xs text-muted-foreground uppercase">
-                  Severity
-                </p>
-                <p className="text-sm font-medium capitalize">
-                  {analysis.severity}
-                </p>
-              </div>
-
-              <div className="p-3 rounded-lg bg-muted/50">
-                <p className="text-xs text-muted-foreground uppercase">
-                  Affected Area
-                </p>
-                <p className="text-sm font-medium">
-                  {analysis.affectedArea}
-                </p>
-              </div>
-
-              <div className="p-3 rounded-lg bg-muted/50">
-                <p className="text-xs text-muted-foreground uppercase">Model</p>
-                <p className="text-sm font-medium">ONNX v1.0</p>
               </div>
             </div>
           </div>
         )}
 
-        {error && (
-          <p className="text-sm text-destructive mt-3">{error}</p>
-        )}
+        {error && <p className="text-red-600 text-sm">{error}</p>}
       </CardContent>
     </Card>
   );

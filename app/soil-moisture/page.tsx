@@ -1,7 +1,7 @@
 "use client";
 
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { SoilMoisture } from "@/components/soil-moisture";
+import SoilMoisture from "@/components/soil-moisture"; // <-- default import
 
 export default function SoilMoisturePage() {
   return (
