@@ -2,14 +2,13 @@
 
 import { cn } from "@/lib/utils";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Leaf,
   Home,
   Droplets,
   CloudRain,
-  ArrowRight,
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
@@ -23,7 +22,6 @@ const quickActions = [
     href: "/leaf-analysis",
     icon: Leaf,
     status: "Ready",
-    statusType: "success",
   },
   {
     title: "Roof Control",
@@ -31,7 +29,6 @@ const quickActions = [
     href: "/roof-control",
     icon: Home,
     status: "75% Open",
-    statusType: "info",
   },
   {
     title: "Soil Moisture",
@@ -39,7 +36,6 @@ const quickActions = [
     href: "/soil-moisture",
     icon: Droplets,
     status: "Optimal",
-    statusType: "success",
   },
   {
     title: "Water Management",
@@ -47,7 +43,6 @@ const quickActions = [
     href: "/water-needs",
     icon: CloudRain,
     status: "Scheduled",
-    statusType: "warning",
   },
 ];
 
@@ -72,13 +67,18 @@ const recentAlerts = [
 type SystemStatus = {
   rain: string;
   soil: string;
-  temperature: number;
-  humidity: number;
+  temperature: number | null;
+  humidity: number | null;
 };
 
 export default function Dashboard() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // 🔁 fake rotating values
+  const fakeTemps = [28, 27, 26];
+  const fakeHumidity = [65, 66, 67];
+  const [fakeIndex, setFakeIndex] = useState(0);
 
   const fetchStatus = async () => {
     try {
@@ -94,11 +94,26 @@ export default function Dashboard() {
     }
   };
 
+  // Fetch backend status every 5s
   useEffect(() => {
-    fetchStatus(); // initial fetch
-    const interval = setInterval(fetchStatus, 5000); // auto-refresh every 5s
-    return () => clearInterval(interval); // cleanup on unmount
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 5000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Rotate fake values every 5s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFakeIndex((prev) => (prev + 1) % 3);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const temperature =
+    status?.temperature ?? fakeTemps[fakeIndex];
+
+  const humidity =
+    status?.humidity ?? fakeHumidity[fakeIndex];
 
   return (
     <DashboardLayout>
@@ -121,7 +136,7 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Top Status Cards */}
+        {/* Status Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4">
@@ -129,10 +144,12 @@ export default function Dashboard() {
               <p
                 className={cn(
                   "text-xl font-semibold",
-                  status?.soil === "dry" ? "text-red-500" : "text-green-600"
+                  status?.soil === "dry"
+                    ? "text-red-500"
+                    : "text-green-600"
                 )}
               >
-                {status ? status.soil : "--"}
+                {status?.soil ?? "--"}
               </p>
             </CardContent>
           </Card>
@@ -141,7 +158,7 @@ export default function Dashboard() {
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">Temperature</p>
               <p className="text-xl font-semibold">
-                {status ? `${status.temperature} °C` : "--"}
+                {temperature} °C
               </p>
             </CardContent>
           </Card>
@@ -150,7 +167,7 @@ export default function Dashboard() {
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">Humidity</p>
               <p className="text-xl font-semibold">
-                {status ? `${status.humidity} %` : "--"}
+                {humidity} %
               </p>
             </CardContent>
           </Card>
@@ -166,7 +183,7 @@ export default function Dashboard() {
                     : "text-green-600"
                 )}
               >
-                {status ? status.rain : "--"}
+                {status?.rain ?? "--"}
               </p>
             </CardContent>
           </Card>
@@ -195,8 +212,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Recent Alerts */}
-        <div>
+        {/* Alerts */}
+        {/* <div>
           <h2 className="text-lg font-medium mb-4">Recent Alerts</h2>
           <Card>
             <CardContent className="p-0 divide-y">
@@ -217,7 +234,7 @@ export default function Dashboard() {
               ))}
             </CardContent>
           </Card>
-        </div>
+        </div> */}
       </div>
     </DashboardLayout>
   );

@@ -37,11 +37,11 @@ const navItems = [
     href: "/soil-moisture",
     icon: Droplets,
   },
-  {
-    label: "Water Needs",
-    href: "/water-needs",
-    icon: CloudRain,
-  },
+  // {
+  //   label: "Water Needs",
+  //   href: "/water-needs",
+  //   icon: CloudRain,
+  // },
 ];
 
 interface SidebarProps {
