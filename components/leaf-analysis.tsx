@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Card,
   CardHeader,
@@ -13,80 +13,161 @@ import {
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
+  Camera,
   Leaf,
 } from "lucide-react";
 
 const LeafAnalysis = () => {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [file, setFile] = useState<File | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [ready, setReady] = useState(false);
+  const [imageBlob, setImageBlob] = useState<Blob | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  const pi_url = process.env.NEXT_PUBLIC_PI_URL;
+  const PI_URL = process.env.NEXT_PUBLIC_PI_URL;
 
-  // Open phone camera
-  const openCamera = () => {
+  // ---------------------------
+  // START CAMERA (SAFE)
+  // ---------------------------
+  const startCamera = async () => {
+    setError(null);
+    setReady(false);
+
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+      setStream(mediaStream);
+    } catch {
+      setError("Camera permission denied");
+    }
+  };
+
+  // ---------------------------
+  // ATTACH STREAM AFTER RENDER
+  // ---------------------------
+  useEffect(() => {
+    if (!stream || !videoRef.current) return;
+
+    const video = videoRef.current;
+    video.srcObject = stream;
+    video.muted = true;
+    video.playsInline = true;
+    video.autoplay = true;
+
+    const onReady = () => {
+      video.play();
+      setReady(true);
+    };
+
+    video.addEventListener("loadeddata", onReady);
+    return () => video.removeEventListener("loadeddata", onReady);
+  }, [stream]);
+
+  // ---------------------------
+  // STOP CAMERA
+  // ---------------------------
+  const stopCamera = () => {
+    stream?.getTracks().forEach((t) => t.stop());
+    setStream(null);
+    setReady(false);
+  };
+
+  // ---------------------------
+  // CAPTURE PHOTO (SAFE)
+  // ---------------------------
+  const capture = () => {
+    if (!videoRef.current || !canvasRef.current || !ready) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      setImageBlob(blob);
+      setPreview(URL.createObjectURL(blob));
+      stopCamera();
+    }, "image/jpeg", 0.95);
+  };
+
+  // ---------------------------
+  // MANUAL FILE UPLOAD
+  // ---------------------------
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageBlob(file);
+    setPreview(URL.createObjectURL(file));
+  };
+
+  const triggerFileUpload = () => {
     fileInputRef.current?.click();
   };
 
-  // Handle captured image
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
+  // ---------------------------
+  // ANALYZE
+  // ---------------------------
+  const analyze = async () => {
+    if (!imageBlob) return;
 
-    setFile(selected);
-    setImagePreview(URL.createObjectURL(selected));
-  };
-
-  // Upload + analyze
-  const uploadAndAnalyze = async () => {
-    if (!file) return;
-
-    setIsAnalyzing(true);
+    setLoading(true);
     setError(null);
-    setAnalysis(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
+    const fd = new FormData();
+    fd.append("file", imageBlob, "leaf.jpg");
 
     try {
-      const res = await fetch(`${pi_url}/upload-analyze`, {
+      const res = await fetch(`${PI_URL}/upload-analyze`, {
         method: "POST",
-        body: formData,
+        body: fd,
       });
 
       if (!res.ok) throw new Error("Analysis failed");
 
       const data = await res.json();
-
       setAnalysis({
         disease: data.prediction_label,
         confidence: data.confidence * 100,
         healthy: data.healthy,
       });
-    } catch (err: any) {
-      setError(err.message);
+    } catch (e: any) {
+      setError(e.message);
     } finally {
-      setIsAnalyzing(false);
+      setLoading(false);
     }
   };
 
   const reset = () => {
-    setFile(null);
+    stopCamera();
+    setPreview(null);
+    setImageBlob(null);
     setAnalysis(null);
     setError(null);
-    setImagePreview(null);
   };
+
+  useEffect(() => () => stopCamera(), []);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex justify-between items-center">
           Leaf Analysis
-          {analysis && (
+          {(preview || analysis) && (
             <Button variant="ghost" size="sm" onClick={reset}>
               <RefreshCw className="w-4 h-4 mr-1" />
               New
@@ -96,59 +177,67 @@ const LeafAnalysis = () => {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Hidden Camera Input */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleFileChange}
-          hidden
-        />
-
-        {/* Initial */}
-        {!file && !isAnalyzing && !analysis && (
+        {!stream && !preview && !analysis && (
           <div className="text-center space-y-4">
-            <div className="h-48 flex items-center justify-center border rounded-xl bg-muted">
+            <div className="w-full h-96 flex items-center justify-center border rounded-xl bg-muted">
               <Leaf className="w-16 h-16 text-muted-foreground" />
             </div>
-            <Button className="w-full h-12" onClick={openCamera}>
-              Capture Leaf
+            <Button className="w-full h-12" onClick={startCamera}>
+              <Camera className="w-4 h-4 mr-2" />
+              Open Camera
+            </Button>
+            <Button className="w-full h-12 mt-2" onClick={triggerFileUpload}>
+              Upload Image
+            </Button>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+            />
+          </div>
+        )}
+
+        {stream && (
+          <div className="space-y-3">
+            <video
+              ref={videoRef}
+              className="max-w-3xl  mx-auto h-96 rounded-xl object-cover bg-black"
+              style={{ transform: "scaleX(-1)" }}
+            />
+            <Button
+              className="w-full h-12"
+              onClick={capture}
+              disabled={!ready}
+            >
+              {ready ? "Take Photo" : "Loading Camera…"}
             </Button>
           </div>
         )}
 
-        {/* Preview */}
-        {file && !analysis && !isAnalyzing && (
+        {preview && !analysis && !loading && (
           <div className="space-y-3">
             <img
-              src={imagePreview!}
-              className="rounded-xl w-full h-64 object-cover"
-              alt="preview"
+              src={preview}
+              className="w-full h-64 rounded-xl object-cover"
             />
-            <Button className="w-full h-12" onClick={uploadAndAnalyze}>
+            <Button className="w-full h-12" onClick={analyze}>
               Analyze Leaf
             </Button>
           </div>
         )}
 
-        {/* Loading */}
-        {isAnalyzing && (
-          <div className="h-48 flex flex-col items-center justify-center">
+        {loading && (
+          <div className="h-full flex flex-col items-center justify-center">
             <Loader2 className="w-8 h-8 animate-spin" />
             <p className="mt-2 text-sm">Analyzing…</p>
           </div>
         )}
 
-        {/* Result */}
         {analysis && (
           <div className="space-y-3">
-            <img
-              src={imagePreview!}
-              className="rounded-xl w-full h-64 object-cover"
-              alt="result"
-            />
-
+            <img src={preview!} className="w-full h-full rounded-xl" />
             <div
               className={`p-4 rounded-xl border ${
                 analysis.healthy
@@ -164,6 +253,9 @@ const LeafAnalysis = () => {
                 )}
                 <div>
                   <p className="font-semibold">{analysis.disease}</p>
+                  <p className="text-sm">
+                    Confidence: {analysis.confidence.toFixed(2)}%
+                  </p>
                 </div>
               </div>
             </div>
@@ -171,6 +263,8 @@ const LeafAnalysis = () => {
         )}
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
+
+        <canvas ref={canvasRef} hidden />
       </CardContent>
     </Card>
   );
